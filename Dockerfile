@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 ENV DATABASE_URL=postgresql://app:build-only@127.0.0.1:5432/douyin_scripts?schema=public \
     SESSION_SECRET=build-only-session-secret-at-least-32-characters \
@@ -10,7 +10,7 @@ RUN npm ci
 COPY . .
 RUN npx prisma generate && npm run build
 
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0
