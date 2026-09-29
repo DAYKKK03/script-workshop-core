@@ -29,3 +29,7 @@
 ## 交付边界
 
 本仓库保存源码，不代表网站已部署或真实供应商功能已验收。外部服务需要另行配置。原项目的本机单人运行环境正在另外实施，没有把该未完成工作混入此快照。
+
+## GitHub 保存
+
+已创建私有仓库 [DAYKKK03/script-workshop-core](https://github.com/DAYKKK03/script-workshop-core)，默认分支 `main`。首次源码提交 `fdd1f562575d374482bb0c7e800d8ffc6fc0db2c` 已上传，并通过 `git ls-remote` 核对一致。

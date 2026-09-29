@@ -22,4 +22,4 @@
 - [x] Remove `lib/lip-sync`, `tests/lip-sync`, the voice helper, dedicated probe scripts and audio cleanup Worker. Remove the associated package commands, environment section, test Compose service and obsolete test expectations. Preserve normal retention work.
 - [x] Update README, scope/status docs and workflow triggers for the independent source-only repository; remove digital-human-only documentation/assets and obsolete local-runtime plans that are not implemented in this snapshot.
 - [x] Run `npm ci`, `npx prisma generate`, `npx prisma validate`, `npm test`, `npm run typecheck`, `npm run lint` and `npm run build` using non-secret verification settings. Review schema consistency, leftover references and staged files.
-- [ ] Commit the reviewed core snapshot, create private `DAYKKK03/script-workshop-core`, push `main` and verify the remote commit and visibility. Record verification results and limitations.
+- [x] Commit the reviewed core snapshot, create private `DAYKKK03/script-workshop-core`, push `main` and verify the remote commit and visibility. Record verification results and limitations.
