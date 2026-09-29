@@ -1,0 +1,331 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String     @id @default(cuid())
+  account          String     @unique
+  passwordHash     String
+  inviteCodeUsed   String
+  status           UserStatus @default(active)
+  dailyScriptLimit Int        @default(30)
+  dailyTopicLimit  Int        @default(5)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  projects                   Project[]
+  extractionJobs             ExtractionJob[]
+  topicGenerationJobs        TopicGenerationJob[]
+  customScriptGenerationJobs CustomScriptGenerationJob[]
+  sessions                   UserSession[]
+  dailyUsage                 DailyUsage[]
+
+  @@index([inviteCodeUsed])
+  @@index([status])
+}
+
+model UserSession {
+  id            String    @id @default(cuid())
+  userId        String
+  tokenHash     String    @unique
+  ipHash        String?
+  userAgentHash String?
+  createdAt     DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model InviteCode {
+  code         String           @id
+  status       InviteCodeStatus @default(unused)
+  usedByUserId String?
+  usedAt       DateTime?
+  createdAt    DateTime         @default(now())
+  createdById  String?
+
+  @@index([status])
+  @@index([usedByUserId])
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  projectName String
+  profileText String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user                       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  extractionJobs             ExtractionJob[]
+  topicGenerationJobs        TopicGenerationJob[]
+  customScriptGenerationJobs CustomScriptGenerationJob[]
+
+  @@index([userId])
+}
+
+model ExtractionJob {
+  id           String              @id @default(cuid())
+  userId       String
+  projectId    String?
+  sourceUrl    String?
+  sourceHost   String?
+  sourceHash   String?
+  status       ExtractionJobStatus @default(queued)
+  errorCode    String?
+  transcript   String?
+  attemptCount Int                 @default(0)
+  maxAttempts  Int                 @default(3)
+  availableAt  DateTime            @default(now())
+  lockedAt     DateTime?
+  lockedBy     String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  expiresAt    DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([status, availableAt])
+  @@index([status, lockedAt])
+  @@index([expiresAt])
+  @@index([sourceHash])
+}
+
+model TopicGenerationJob {
+  id              String                   @id @default(cuid())
+  userId          String
+  projectId       String
+  input           Json?
+  result          Json?
+  clientRequestId String
+  status          TopicGenerationJobStatus @default(queued)
+  errorCode       String?
+  quotaChargedAt  DateTime?
+  attemptCount    Int                      @default(0)
+  maxAttempts     Int                      @default(2)
+  availableAt     DateTime                 @default(now())
+  lockedAt        DateTime?
+  lockedBy        String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  runDeadlineAt   DateTime
+  expiresAt       DateTime
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clientRequestId])
+  @@index([userId, status])
+  @@index([status, availableAt])
+  @@index([status, lockedAt])
+  @@index([expiresAt])
+}
+
+model CustomScriptGenerationJob {
+  id                   String                          @id @default(cuid())
+  userId               String
+  projectId            String?
+  clientRequestId      String
+  inputHash            String
+  input                Json?
+  result               Json?
+  status               CustomScriptGenerationJobStatus @default(queued)
+  errorCode            String?
+  providerCallsStarted Int                             @default(0)
+  semanticAttempt      Int                             @default(0)
+  quotaChargedAt       DateTime?
+  availableAt          DateTime                        @default(now())
+  lockedAt             DateTime?
+  lockedBy             String?
+  createdAt            DateTime                        @default(now())
+  updatedAt            DateTime                        @updatedAt
+  runDeadlineAt        DateTime
+  finishedAt           DateTime?
+  expiresAt            DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, clientRequestId])
+  @@index([userId, status])
+  @@index([status, availableAt])
+  @@index([status, lockedAt])
+  @@index([status, runDeadlineAt])
+  @@index([expiresAt])
+}
+
+model AdminUser {
+  id                  String      @id @default(cuid())
+  account             String      @unique
+  passwordHash        String
+  totpSecretEncrypted String
+  role                AdminRole
+  status              AdminStatus @default(active)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  lastLoginAt         DateTime?
+
+  sessions      AdminSession[]
+  recoveryCodes AdminRecoveryCode[]
+  auditLogs     AdminAuditLog[]
+
+  @@index([role])
+  @@index([status])
+}
+
+model AdminSession {
+  id            String    @id @default(cuid())
+  adminId       String
+  tokenHash     String    @unique
+  ipHash        String?
+  userAgentHash String?
+  mfaVerifiedAt DateTime
+  createdAt     DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model AdminRecoveryCode {
+  id        String    @id @default(cuid())
+  adminId   String
+  codeHash  String    @unique
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+}
+
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  adminId    String?
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  ipHash     String?
+  createdAt  DateTime @default(now())
+
+  admin AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([adminId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
+}
+
+model DailyUsage {
+  id                   String   @id @default(cuid())
+  userId               String
+  usageDate            DateTime @db.Date
+  scriptsGenerated     Int      @default(0)
+  topicIdeasGenerated  Int      @default(0)
+  deepseekRequests     Int      @default(0)
+  deepseekSuccesses    Int      @default(0)
+  deepseekFailures     Int      @default(0)
+  deepseekInputTokens  Int      @default(0)
+  deepseekOutputTokens Int      @default(0)
+  tikhubRequests       Int      @default(0)
+  tikhubRetries        Int      @default(0)
+  tikhubSuccesses      Int      @default(0)
+  tikhubFailures       Int      @default(0)
+  asrJobs              Int      @default(0)
+  asrSuccesses         Int      @default(0)
+  asrFailures          Int      @default(0)
+  asrAudioSeconds      Int      @default(0)
+  estimatedCostMicros  Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, usageDate])
+  @@index([usageDate])
+}
+
+model RateLimitBucket {
+  keyHash         String   @id
+  scope           String
+  windowStartedAt DateTime
+  count           Int      @default(0)
+  expiresAt       DateTime
+
+  @@index([scope, windowStartedAt])
+  @@index([expiresAt])
+}
+
+model CostConfiguration {
+  id                          String   @id @default("default")
+  deepseekInputCnyPerMillion  Float    @default(0)
+  deepseekOutputCnyPerMillion Float    @default(0)
+  asrCnyPerHour               Float    @default(0)
+  tikhubCnyPerRequest         Float    @default(0)
+  updatedById                 String?
+  updatedAt                   DateTime @updatedAt
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
+enum InviteCodeStatus {
+  unused
+  used
+  disabled
+}
+
+enum ExtractionJobStatus {
+  queued
+  processing
+  succeeded
+  failed
+}
+
+enum TopicGenerationJobStatus {
+  queued
+  processing
+  succeeded
+  failed
+  canceled
+}
+
+enum CustomScriptGenerationJobStatus {
+  queued
+  processing
+  succeeded
+  needs_profile
+  failed
+  canceled
+}
+
+enum AdminRole {
+  OWNER
+  OPERATOR
+}
+
+enum AdminStatus {
+  active
+  disabled
+}

@@ -1,0 +1,51 @@
+name: Staging Topic Worker sanitized logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "Safe Docker log window"
+        required: true
+        default: "30m"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-topic-log-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, X64, staging-hk]
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Print sanitized Topic database summary
+        env:
+          DEPLOY_ROOT: /opt/douyin-script
+        run: |
+          set -eu
+          cd "$DEPLOY_ROOT"
+          compose_file="compose.yml"
+          if [ -f .deploy-mode ] && [ "$(cat .deploy-mode)" = "ip-http" ]; then compose_file="compose.ip-http.yml"; fi
+          docker compose -f "$compose_file" exec -T -u 0 worker sh -c 'mkdir -p /app/scripts && chown app:app /app/scripts'
+          docker compose -f "$compose_file" cp "$GITHUB_WORKSPACE/scripts/staging-topic-runtime-probe.ts" worker:/app/scripts/staging-topic-runtime-probe.ts
+          docker compose -f "$compose_file" exec -T worker node --import tsx /app/scripts/staging-topic-runtime-probe.ts
+          docker compose -f "$compose_file" exec -T -u 0 worker rm -f /app/scripts/staging-topic-runtime-probe.ts >/dev/null 2>&1 || true
+      - name: Print sanitized Topic Worker outcome events
+        env:
+          DEPLOY_ROOT: /opt/douyin-script
+          SINCE: ${{ inputs.since }}
+        run: |
+          set -eu
+          case "$SINCE" in *[!0-9smhd]*) echo "Invalid log window" >&2; exit 2 ;; esac
+          cd "$DEPLOY_ROOT"
+          compose_file="compose.yml"
+          if [ -f .deploy-mode ] && [ "$(cat .deploy-mode)" = "ip-http" ]; then compose_file="compose.ip-http.yml"; fi
+          docker compose -f "$compose_file" logs --since "$SINCE" topic-worker 2>&1 \
+            | grep -E '\{"event":"topic_generation_(failed|succeeded)"' \
+            | tail -20 \
+            | sed 's/^[^{]*//'

@@ -1,0 +1,49 @@
+name: Staging custom script link-first probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-custom-script-link-first-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, X64, staging-hk]
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Run five quota-free product-service probes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          deploy_root="/opt/douyin-script"
+          cd "$deploy_root"
+          compose_file="compose.yml"
+          if [ -f .deploy-mode ] && [ "$(cat .deploy-mode)" = "ip-http" ]; then
+            compose_file="compose.ip-http.yml"
+          fi
+
+          deployed_sha="$(cat .deployed-image-tag 2>/dev/null || true)"
+          test "$deployed_sha" = "$GITHUB_SHA"
+          test "$(docker compose -f "$compose_file" ps --status running -q custom-script-worker | wc -l | tr -d ' ')" = "1"
+
+          probe_path="/app/scripts/staging-custom-script-link-first-probe.ts"
+          cleanup() {
+            docker compose -f "$compose_file" exec -T -u 0 custom-script-worker rm -f "$probe_path" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker compose -f "$compose_file" cp \
+            "$GITHUB_WORKSPACE/scripts/staging-custom-script-link-first-probe.ts" \
+            "custom-script-worker:$probe_path"
+          docker compose -f "$compose_file" exec -T \
+            -e CUSTOM_SCRIPT_LINK_FIRST_PROBE=STAGING \
+            custom-script-worker node --import tsx "$probe_path"

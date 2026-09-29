@@ -1,0 +1,144 @@
+name: douyin-script-production
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-douyin_scripts}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    image: ${APP_IMAGE:?APP_IMAGE is required}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      SESSION_COOKIE_SECURE: "true"
+      TZ: Asia/Shanghai
+      HOSTNAME: "0.0.0.0"
+    command: ["sh", "-c", "npx prisma migrate deploy && node .next/standalone/server.js"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend, egress]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  worker:
+    image: ${APP_IMAGE:?APP_IMAGE is required}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      EXTRACTION_WORKER_CONCURRENCY: ${EXTRACTION_WORKER_CONCURRENCY:-2}
+      TZ: Asia/Shanghai
+    command: ["npm", "run", "worker"]
+    deploy:
+      replicas: 1
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks: [backend, egress]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h db -p 5432 -U $${POSTGRES_USER:-app} -d $${POSTGRES_DB:-douyin_scripts}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  topic-worker:
+    image: ${APP_IMAGE:?APP_IMAGE is required}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      TZ: Asia/Shanghai
+    command: ["npm", "run", "worker:topics"]
+    deploy:
+      replicas: 1
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks: [backend, egress]
+
+  custom-script-worker:
+    image: ${APP_IMAGE:?APP_IMAGE is required}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      TZ: Asia/Shanghai
+    command: ["npm", "run", "worker:custom-scripts"]
+    deploy:
+      replicas: 1
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks: [backend, egress]
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN is required}
+      EDGEONE_ORIGIN_SECRET: ${EDGEONE_ORIGIN_SECRET:?EDGEONE_ORIGIN_SECRET is required}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    networks: [egress]
+
+  backup:
+    build:
+      context: ./deploy/backup
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-douyin_scripts}
+      PGUSER: ${POSTGRES_USER:-app}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      TZ: Asia/Shanghai
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend, egress]
+
+networks:
+  backend:
+    internal: true
+  egress:
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

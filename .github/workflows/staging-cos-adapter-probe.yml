@@ -1,0 +1,212 @@
+name: Staging COS adapter probe
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: staging-cos-adapter-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, X64, staging-hk]
+    steps:
+      - name: Probe deployed COS adapter from worker container
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          deploy_root="/opt/douyin-script"
+          compose_file="$deploy_root/compose.ip-http.yml"
+          probe_file="${RUNNER_TEMP:-/tmp}/staging-cos-adapter-probe.ts"
+
+          cd "$deploy_root"
+
+          printf 'DEPLOYED_HEAD=%s\n' "$(cat .deployed-image-tag 2>/dev/null || printf 'missing')"
+          docker compose -f "$compose_file" ps web worker
+
+          cat > "$probe_file" <<'TS'
+          import { createHash } from "node:crypto";
+          import { rm, writeFile } from "node:fs/promises";
+          import os from "node:os";
+          import path from "node:path";
+          import { getMediaRelayConfig } from "/app/lib/media-relay/config.ts";
+          import {
+            deleteRelayObject,
+            uploadRelayObject
+          } from "/app/lib/media-relay/object-storage.ts";
+
+          type CapturedRequest = {
+            host: string;
+            statusClass: string;
+            cosErrorCode: string | null;
+            requestIdHash8: string | null;
+          };
+
+          const captures: Record<string, CapturedRequest> = {};
+
+          function hash8(value: string) {
+            return createHash("sha256").update(value).digest("hex").slice(0, 8);
+          }
+
+          function statusClass(status: number) {
+            return `${Math.floor(status / 100)}xx`;
+          }
+
+          function headerHash8(headers: Headers) {
+            const value =
+              headers.get("x-cos-request-id") ||
+              headers.get("x-cos-trace-id") ||
+              headers.get("x-request-id");
+            return value ? hash8(value) : null;
+          }
+
+          function cosErrorCode(body: string) {
+            const match = body.match(/<Code>([^<]+)<\/Code>/);
+            return match ? match[1] : null;
+          }
+
+          async function capturedFetch(
+            label: string,
+            input: string | URL | Request,
+            init?: RequestInit
+          ) {
+            const url = new URL(String(input));
+            const response = await fetch(input, init);
+            let body = "";
+            try {
+              body = await response.clone().text();
+            } catch {
+              body = "";
+            }
+            captures[label] = {
+              host: url.host,
+              statusClass: statusClass(response.status),
+              cosErrorCode: cosErrorCode(body),
+              requestIdHash8: headerHash8(response.headers)
+            };
+            return response;
+          }
+
+          async function main() {
+            const config = getMediaRelayConfig(process.env);
+            const randomId = createHash("sha256")
+              .update(`${Date.now()}-${Math.random()}`)
+              .digest("hex")
+              .slice(0, 12);
+            const objectKey = path.posix.join(
+              config.objectPrefix,
+              "diagnostics",
+              `${randomId}.txt`
+            );
+            const objectKeyHash8 = hash8(objectKey);
+            const filePath = path.join(os.tmpdir(), `cos-probe-${randomId}.txt`);
+            const result = {
+              relayEnabled: config.enabled,
+              missingFields: config.missingFields,
+              objectKeyHash8,
+              keyLeadingSlash: objectKey.startsWith("/"),
+              put: null as unknown,
+              publicHead: null as unknown,
+              publicGet: null as unknown,
+              delete: null as unknown,
+              verdict: "not_run"
+            };
+
+            if (!config.enabled || config.missingFields.length > 0) {
+              result.verdict = "relay_not_configured";
+              console.log(JSON.stringify(result, null, 2));
+              process.exit(2);
+            }
+
+            await writeFile(filePath, Buffer.from("ok"));
+
+            try {
+              const upload = await uploadRelayObject({
+                filePath,
+                objectKey,
+                contentType: "text/plain",
+                storage: config.storage,
+                fetchImpl: (input, init) => capturedFetch("put", input, init)
+              });
+
+              result.put = {
+                status: upload.status,
+                reason: "reason" in upload ? upload.reason : null,
+                httpStatusClass:
+                  "httpStatusClass" in upload ? upload.httpStatusClass : captures.put?.statusClass,
+                request: captures.put
+              };
+
+              if (upload.status !== "success") {
+                result.verdict = "put_failed";
+                console.log(JSON.stringify(result, null, 2));
+                process.exit(3);
+              }
+
+              const head = await capturedFetch("publicHead", upload.publicUrl, {
+                method: "HEAD"
+              });
+              result.publicHead = captures.publicHead;
+
+              if (!head.ok) {
+                await capturedFetch("publicGet", upload.publicUrl, {
+                  method: "GET",
+                  headers: { Range: "bytes=0-0" }
+                });
+                result.publicGet = captures.publicGet;
+              }
+
+              const deleted = await deleteRelayObject({
+                objectKey,
+                storage: config.storage,
+                fetchImpl: (input, init) => capturedFetch("delete", input, init)
+              });
+              result.delete = {
+                status: deleted.status,
+                reason: "reason" in deleted ? deleted.reason : null,
+                httpStatusClass:
+                  "httpStatusClass" in deleted ? deleted.httpStatusClass : captures.delete?.statusClass,
+                request: captures.delete
+              };
+
+              if (deleted.status !== "success") {
+                result.verdict = "delete_failed";
+                console.log(JSON.stringify(result, null, 2));
+                process.exit(4);
+              }
+
+              result.verdict = head.ok || captures.publicGet?.statusClass === "2xx"
+                ? "passed"
+                : "public_read_failed";
+              console.log(JSON.stringify(result, null, 2));
+              process.exit(result.verdict === "passed" ? 0 : 5);
+            } finally {
+              await rm(filePath, { force: true });
+            }
+          }
+
+          main().catch((error) => {
+            console.log(
+              JSON.stringify(
+                {
+                  verdict: "probe_exception",
+                  errorName: error instanceof Error ? error.name : "unknown",
+                  errorMessageBucket:
+                    error instanceof Error && error.message
+                      ? error.message.slice(0, 80)
+                      : "none"
+                },
+                null,
+                2
+              )
+            );
+            process.exit(10);
+          });
+          TS
+
+          docker compose -f "$compose_file" cp "$probe_file" worker:/tmp/staging-cos-adapter-probe.ts
+          docker compose -f "$compose_file" exec -T worker node --import tsx /tmp/staging-cos-adapter-probe.ts
+          docker compose -f "$compose_file" exec -T worker rm -f /tmp/staging-cos-adapter-probe.ts

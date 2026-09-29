@@ -1,0 +1,49 @@
+node_modules/
+.next/
+out/
+
+# Local environment and database files
+.env
+.env.local
+.env.*
+!.env.example
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+prisma/dev.db
+prisma/dev.db-journal
+prisma/dev.db-shm
+prisma/dev.db-wal
+
+# Generated caches
+tsconfig.tsbuildinfo
+.npm-cache/
+.deployed-image-tag
+backups/
+zap-report.html
+*.dump
+*.age
+*.provision.json
+admin-provision*.json
+coverage/
+test-results/
+
+# Mavis agent state
+.mavis/
+
+# Local agent workspaces and conversations. They are not application source.
+.claude/
+.codex/
+.workbuddy/
+
+# Playwright
+.playwright-cli/
+
+# Docker volumes (never commit data)
+postgres-data/
+*.pid
+
+# OS files
+.DS_Store
+Thumbs.db

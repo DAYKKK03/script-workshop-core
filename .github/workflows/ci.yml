@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [staging, main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: douyin_scripts_ci
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d douyin_scripts_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://app:ci-only@127.0.0.1:5432/douyin_scripts_ci?schema=public
+      TEST_DATABASE_URL: postgresql://app:ci-only@127.0.0.1:5432/douyin_scripts_test?schema=public
+      SESSION_SECRET: ci-only-session-secret-at-least-32-characters
+      ADMIN_MFA_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      DOUYIN_PROVIDER: blocked
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Create isolated integration database
+        env:
+          PGPASSWORD: ci-only
+        run: psql -h 127.0.0.1 -U app -d douyin_scripts_ci -v ON_ERROR_STOP=1 -c 'CREATE DATABASE douyin_scripts_test'
+      - run: npx prisma validate
+      - run: npx prisma migrate deploy
+      - name: Verify migrated schema matches the core models
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - run: DATABASE_URL="$TEST_DATABASE_URL" npx prisma migrate deploy
+      - run: npm run worker:topics:check
+      - run: npm run worker:custom-scripts:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Validate formal Caddy configuration
+        run: |
+          sed 's/{\$APP_DOMAIN}/staging.example.test/g; s/{\$EDGEONE_ORIGIN_SECRET}/fixture-secret/g' deploy/Caddyfile \
+            | docker run --rm -i caddy:2.10-alpine caddy validate --config - --adapter caddyfile
+      - run: npm audit --omit=dev --audit-level=high
