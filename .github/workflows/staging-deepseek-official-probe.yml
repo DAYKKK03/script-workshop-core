@@ -19,7 +19,7 @@ jobs:
   probe:
     runs-on: [self-hosted, Linux, X64, staging-hk]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Diagnose runner storage read-only
