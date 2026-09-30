@@ -31,7 +31,11 @@ try {
     child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
     child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
     child.once("error", (error) => { clearTimeout(timer); reject(error); });
-    child.once("exit", (code) => { clearTimeout(timer); code === 0 && stdout.includes("DESKTOP_SMOKE_OK") ? resolve(stdout.trim()) : reject(new Error(`Packaged smoke failed (${code}): ${stderr.slice(-1000)}`)); });
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      if (code === 0 && stdout.includes("DESKTOP_SMOKE_OK")) resolve(stdout.trim());
+      else reject(new Error(`Packaged smoke failed (${code}): ${stderr.slice(-1000)}`));
+    });
   });
   console.log(output);
 } finally {
