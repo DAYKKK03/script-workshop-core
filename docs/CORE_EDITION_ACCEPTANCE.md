@@ -4,7 +4,7 @@
 
 [v0.2.0 Release](https://github.com/DAYKKK03/script-workshop-core/releases/tag/v0.2.0) 提供 Windows x64 安装版与便携版、macOS Intel x64 与 Apple Silicon arm64 安装包，以及 `SHA256SUMS.txt`。公开下载、资产文件名与 SHA-256 已核对。
 
-[Desktop packages 构建运行](https://github.com/DAYKKK03/script-workshop-core/actions/runs/36730527434) 的三个平台任务全部成功。每个平台都在临时目录启动随包 PostgreSQL，完成邀请码注册、中文商家项目创建及重启读取；打包后的 Electron 程序随后完成本地数据库启动、健康检查和注册烟测。Windows 测试使用普通权限令牌。
+[Desktop packages 构建运行](https://github.com/DAYKKK03/script-workshop-core/actions/runs/36747600552) 的三个平台任务全部成功。每个平台都在临时目录启动随包 PostgreSQL，完成邀请码注册、中文商家项目创建及重启读取；打包后的 Electron 程序随后完成本地数据库启动、健康检查和注册烟测。Windows 测试使用普通权限令牌。
 
 验收 Agent 独立核对构建记录和正式 Release，结论为**发行包自动化验收通过**。
 

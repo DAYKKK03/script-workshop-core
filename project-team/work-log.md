@@ -1,7 +1,5 @@
-# Core edition work log
+# 基础版工作记录
 
-2026-09-29 Asia/Shanghai | Codex | Core repository split | Exported pinned application source and removed digital-human module in an independent directory | 400 tests passed, 23 environment-gated skips; typecheck, lint, Prisma and build passed | Publish the verified private repository
+2026-10-01 Asia/Shanghai | Codex | 独立交付整理 | 清理旧项目关联与历史部署说明，核对仓库无实际 API Key；将公开仓库主分支整理为独立初始提交 | `npm test` 399 通过、23 跳过；类型检查与 Lint 通过 | 三平台重新打包
 
-2026-09-29 Asia/Shanghai | Codex | Publication | Created private DAYKKK03/script-workshop-core and pushed main | Remote source commit fdd1f56 matches local; no deployment performed | Follow any CI findings separately from real-provider acceptance
-
-2026-09-29 23:36 Asia/Shanghai | Acceptance Agent | Acceptance | Independently reviewed core edition 8a78ff9; ran install, 423 tests, typecheck, lint, Prisma checks, build, production dependency audit and local unauthenticated HTTP smoke; wrote docs/CORE_EDITION_ACCEPTANCE.md | 验收不通过：400 tests passed and 23 environment skips; CI schema drift, production audit findings and static mobile navigation issue; database runtime blocked by unavailable Docker/PostgreSQL | Execution Agent fixes reported issues, then repeat CI and isolated database/Worker/login acceptance; no implementation edits or deployment performed
+2026-10-01 Asia/Shanghai | Acceptance Agent | 发行复验 | 对构建 36747600552、v0.2.0 Release、公开下载和 SHA-256 独立核对 | Windows x64、macOS x64、macOS arm64 包内启动均通过；仓库 Secrets、Variables、Environments 均为 0 | 外部服务真实调用和安装器人工操作另行验收
