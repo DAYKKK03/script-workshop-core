@@ -79,10 +79,37 @@ function createSettingsWindow() {
   settingsWindow.loadFile(settingsFile);
 }
 
+async function runPackagedSmoke(store) {
+  try {
+    const config = store.initialise();
+    runtime = new DesktopRuntime({ ...workPaths(), config, onStatus: () => {} });
+    const url = await runtime.start();
+    const response = await fetch(`${url}/api/health`);
+    if (!response.ok) throw new Error("打包应用健康检查失败");
+    const register = await fetch(`${url}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: url },
+      body: JSON.stringify({ account: `smoke${Date.now()}`, password: "Local-smoke-password-123!", inviteCode: config.inviteCode })
+    });
+    if (register.status !== 201) throw new Error("打包应用注册失败");
+    process.stdout.write("DESKTOP_SMOKE_OK\n");
+    await runtime.stop();
+    app.exit(0);
+  } catch (error) {
+    process.stderr.write(`DESKTOP_SMOKE_FAIL: ${error.message}\n`);
+    await runtime?.stop().catch(() => {});
+    app.exit(1);
+  }
+}
+
 app.whenReady().then(() => {
   if (!app.requestSingleInstanceLock()) { app.quit(); return; }
   app.on("second-instance", () => (workWindow && !workWindow.isDestroyed() ? workWindow : settingsWindow)?.focus());
   const store = createStore(app.getPath("userData"), safeStorage);
+  if (process.env.SCRIPT_WORKSHOP_SMOKE === "1") {
+    void runPackagedSmoke(store);
+    return;
+  }
   try { store.initialise(); } catch { publishStatus("本机加密服务不可用，请检查系统密钥服务"); }
   ipcMain.handle("desktop:get", (event) => {
     trusted(event);

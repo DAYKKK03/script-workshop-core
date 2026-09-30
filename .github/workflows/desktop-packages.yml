@@ -34,6 +34,8 @@ jobs:
       - run: npm run desktop:prepare
       - run: npm run test:desktop
       - run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+      - name: Smoke-test packaged Electron app
+        run: node scripts/smoke-packaged-desktop.mjs
       - name: Write SHA-256 checksums
         shell: bash
         run: |
