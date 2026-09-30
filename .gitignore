@@ -1,5 +1,7 @@
 node_modules/
 .next/
+desktop-bundle/
+dist-desktop/
 out/
 
 # Local environment and database files

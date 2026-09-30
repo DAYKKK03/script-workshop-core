@@ -1,7 +1,8 @@
 {
   "name": "script-workshop-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "main": "desktop/main.cjs",
   "scripts": {
     "dev": "next dev",
     "start": "next start",
@@ -12,6 +13,10 @@
     "worker:custom-scripts:check": "tsx --tsconfig tsconfig.json worker/custom-script-worker.ts --check",
     "worker:verify-functional": "tsx --tsconfig tsconfig.json worker/verify-functional.ts",
     "build": "next build",
+    "desktop:prepare": "npm run build && node scripts/prepare-desktop.mjs",
+    "desktop:dev": "npm run desktop:prepare && electron .",
+    "desktop:pack": "npm run desktop:prepare && electron-builder --dir",
+    "test:desktop": "node --test tests/desktop-config.test.cjs tests/desktop-runtime.integration.cjs",
     "lint": "eslint .",
     "test": "NODE_ENV=test NODE_OPTIONS=--require=./tests/server-only-shim.cjs node --import tsx --test tests/**/*.test.ts",
     "test:runtime-probe": "NODE_ENV=test NODE_OPTIONS=--require=./tests/server-only-shim.cjs node --import tsx --test --test-reporter=tap tests/topics/npm-test-runtime-probe.test.ts",
@@ -34,9 +39,11 @@
     "class-variance-authority": "^0.7.1",
     "cos-nodejs-sdk-v5": "^3.0.0",
     "dotenv": "^17.4.2",
+    "embedded-postgres": "^16.14.0-beta.17",
+    "ffmpeg-static": "^5.3.0",
     "gsap": "^3.15.0",
     "lucide-react": "^1.20.0",
-    "next": "^15.5.23",
+    "next": "15.5.26",
     "ogl": "^1.0.11",
     "otpauth": "^9.5.1",
     "prisma": "^6.19.3",
@@ -55,8 +62,11 @@
     "@types/react": "19.1.8",
     "@types/react-dom": "19.1.6",
     "@types/three": "^0.184.1",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
     "eslint": "9.29.0",
-    "eslint-config-next": "^15.5.23",
+    "eslint-config-next": "15.5.26",
     "tailwindcss": "4.1.10",
     "typescript": "5.8.3"
   },
@@ -67,6 +77,38 @@
     "@prisma/config": {
       "deepmerge-ts": "8.0.2"
     },
-    "sharp": "0.35.3"
+    "sharp": "0.35.5",
+    "qs": "6.16.0"
+  },
+  "build": {
+    "appId": "cn.scriptworkshop.core",
+    "productName": "脚本工坊基础版",
+    "asar": false,
+    "directories": {
+      "output": "dist-desktop"
+    },
+    "files": [
+      "desktop/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "desktop-bundle",
+        "to": "core"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    }
   }
 }

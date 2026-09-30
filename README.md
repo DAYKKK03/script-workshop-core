@@ -17,7 +17,15 @@
 
 基于 [DAYKKK03/xinmeiti](https://github.com/DAYKKK03/xinmeiti) 提交 `b35380ca7e879c06c2b792bb0c94ac750862f46f`，于 2026-09-29 独立导出并建立新的提交历史。原项目和其中的数字人开发代码不受影响。
 
-本次交付为源码保存，不包含网站部署、旧数据库恢复或真实外部服务验收。原项目正在实施的专用本机 Compose 尚未纳入该快照。验证结果见 [CORE_EDITION_VERIFICATION.md](docs/CORE_EDITION_VERIFICATION.md)。原有部署记录仅为来源项目历史。
+本仓库另提供无需另装 Docker、Node.js、PostgreSQL 的桌面应用构建。原项目正在实施的专用本机 Compose 未纳入该快照。源码初验见 [CORE_EDITION_VERIFICATION.md](docs/CORE_EDITION_VERIFICATION.md)，桌面发行验收以对应 Release 的记录为准。原有部署记录仅为来源项目历史。
+
+## 普通用户安装
+
+从本仓库的 [Releases](https://github.com/DAYKKK03/script-workshop-core/releases) 下载与电脑匹配的应用包。打开后先保存自己的 DeepSeek、TikHub、火山引擎等服务参数，再点击「启动应用」。启动器自动建立独立的本地数据库并启动三个后台任务；首次注册使用配置页显示的邀请码。关闭应用后数据仍保存在本机，下次打开可以继续使用。没有配置的外部服务保持不可用状态，应用不会提供模拟结果。
+
+应用和数据库只监听本机回环地址。注册、登录和商家项目不需要用户另装数据库；AI 生成、抖音提取及语音转写依赖对应服务和网络。发行包未经签名或公证时，操作系统可能显示未知开发者提示；以 Release 页面披露的实际签名状态为准。
+
+当前源码中的桌面应用构建方式见下文；只有在 Release 页面实际出现并标明验证状态的包才视为可下载交付。
 
 ## 开发运行
 
@@ -61,7 +69,11 @@ npm run typecheck
 npm run lint
 npm test
 npm run build
+npm run desktop:prepare
+npm run test:desktop
 ```
+
+`desktop:prepare` 生成可供打包的 Next standalone、迁移和后台任务文件。开发者可运行 `npx electron-builder --dir --mac --arm64`（或对应平台参数）制作未签名应用目录；正式安装包由 [桌面构建工作流](.github/workflows/desktop-packages.yml) 分平台构建并上传校验和。桌面端运行测试使用随包 PostgreSQL 和临时目录，无需 Docker，结束后清除测试数据。
 
 数据库集成测试使用独立的 `TEST_DATABASE_URL`，不得与 `DATABASE_URL` 指向同一数据库。没有测试数据库或 staging 配置时，相应测试会明确跳过。GitHub CI 提供隔离 PostgreSQL 执行数据库测试。
 

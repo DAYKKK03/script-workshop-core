@@ -132,6 +132,7 @@ model TopicGenerationJob {
   @@index([userId, status])
   @@index([status, availableAt])
   @@index([status, lockedAt])
+  @@index([status, runDeadlineAt])
   @@index([expiresAt])
 }
 

@@ -11,9 +11,13 @@ const compat = new FlatCompat({
 
 const eslintConfig = [
   {
-    ignores: [".next/**", "node_modules/**", "next-env.d.ts"]
+    ignores: [".next/**", "node_modules/**", "desktop-bundle/**", "dist-desktop/**", "next-env.d.ts"]
   },
-  ...compat.extends("next/core-web-vitals", "next/typescript")
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    files: ["desktop/**/*.cjs", "tests/desktop*.cjs"],
+    rules: { "@typescript-eslint/no-require-imports": "off" }
+  }
 ];
 
 export default eslintConfig;

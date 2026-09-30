@@ -88,9 +88,23 @@ export function AppShell({ children, active, account }: AppShellProps) {
         <div className="flex min-w-0 flex-1 flex-col lg:pl-60">
           <header className="glass-panel sticky top-0 z-10 flex h-16 items-center justify-between rounded-none border-x-0 border-t-0 px-5 lg:px-8">
             <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-md border border-white/12 bg-white/8 text-[#f8fafc]">
-                <Menu size={18} strokeWidth={2} />
-              </span>
+              <details className="group relative lg:hidden">
+                <summary aria-label="打开导航菜单" className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md border border-white/12 bg-white/8 text-[#f8fafc] [&::-webkit-details-marker]:hidden">
+                  <Menu size={18} strokeWidth={2} />
+                </summary>
+                <nav aria-label="移动端导航" className="glass-panel absolute left-0 top-11 z-30 flex w-52 flex-col gap-1 rounded-lg border border-white/12 bg-[#090b16] p-2 shadow-xl">
+                  {navItems.map((item) => {
+                    const Icon = item.Icon;
+                    return (
+                      <Link key={item.key} href={item.href} aria-current={active === item.key ? "page" : undefined} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-[#f8fafc] hover:bg-white/10">
+                        <Icon size={17} />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                  <div className="border-t border-white/10 px-3 pt-2"><LogoutButton /></div>
+                </nav>
+              </details>
               <Link
                 href="/generate"
                 className="flex items-center gap-2 text-sm font-semibold text-[#f8fafc] lg:hidden"
