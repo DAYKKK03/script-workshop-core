@@ -4,6 +4,7 @@
   "private": true,
   "main": "desktop/main.cjs",
   "scripts": {
+    "postinstall": "node scripts/patch-embedded-postgres.mjs",
     "dev": "next dev",
     "start": "next start",
     "worker": "tsx --tsconfig tsconfig.json worker/extraction-worker.ts",
@@ -89,6 +90,7 @@
     },
     "files": [
       "desktop/**/*",
+      "scripts/patch-embedded-postgres.mjs",
       "package.json",
       "!**/*.map"
     ],

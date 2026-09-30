@@ -87,6 +87,7 @@ class DesktopRuntime {
       port: dbPort,
       authMethod: "scram-sha-256",
       persistent: true,
+      initdbFlags: ["--encoding=UTF8"],
       postgresFlags: ["-c", "listen_addresses=127.0.0.1", "-c", "unix_socket_directories="],
       onLog: process.env.SCRIPT_WORKSHOP_DEBUG_POSTGRES === "1" ? (message) => process.stderr.write(String(message)) : () => {},
       onError: process.env.SCRIPT_WORKSHOP_DEBUG_POSTGRES === "1" ? (error) => process.stderr.write(String(error)) : () => {}
