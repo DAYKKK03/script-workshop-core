@@ -88,8 +88,8 @@ class DesktopRuntime {
       authMethod: "scram-sha-256",
       persistent: true,
       postgresFlags: ["-c", "listen_addresses=127.0.0.1", "-c", "unix_socket_directories="],
-      onLog: () => {},
-      onError: () => {}
+      onLog: process.env.SCRIPT_WORKSHOP_DEBUG_POSTGRES === "1" ? (message) => process.stderr.write(String(message)) : () => {},
+      onError: process.env.SCRIPT_WORKSHOP_DEBUG_POSTGRES === "1" ? (error) => process.stderr.write(String(error)) : () => {}
     });
     this.onStatus("正在启动本地数据库");
     if (firstRun) await this.postgres.initialise();
@@ -166,7 +166,20 @@ class DesktopRuntime {
     if (this.postgres) {
       const pg = this.postgres;
       this.postgres = null;
-      await pg.stop();
+      if (pg.process && (pg.process.exitCode !== null || pg.process.signalCode !== null)) {
+        pg.process = undefined;
+      } else {
+        let timer;
+        await Promise.race([
+          pg.stop(),
+          new Promise((resolve) => {
+            timer = setTimeout(() => {
+              if (pg.process && pg.process.exitCode === null && pg.process.signalCode === null) pg.process.kill("SIGKILL");
+              resolve();
+            }, 10000);
+          })
+        ]).finally(() => clearTimeout(timer));
+      }
     }
     this.url = null;
     this.onStatus("已停止");

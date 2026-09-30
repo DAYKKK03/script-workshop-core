@@ -18,7 +18,7 @@ test("本地应用无需 Docker 完成注册、项目创建和重启持久化", 
     inviteCode: crypto.randomBytes(18).toString("base64url"),
     providers: {}
   };
-  const createRuntime = () => new DesktopRuntime({ userData, bundleDir, appDir: path.join(__dirname, ".."), config });
+  const createRuntime = () => new DesktopRuntime({ userData, bundleDir, appDir: path.join(__dirname, ".."), config, onStatus: (value) => console.log(`Desktop runtime: ${value}`) });
   let runtime = createRuntime();
   const account = `desktop${Date.now()}`;
   const password = "Local-test-password-123!";

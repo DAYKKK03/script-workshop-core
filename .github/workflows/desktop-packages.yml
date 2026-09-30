@@ -33,6 +33,8 @@ jobs:
       - run: npm ci
       - run: npm run desktop:prepare
       - run: npm run test:desktop
+        env:
+          SCRIPT_WORKSHOP_DEBUG_POSTGRES: "1"
       - run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
       - name: Smoke-test packaged Electron app
         run: node scripts/smoke-packaged-desktop.mjs
