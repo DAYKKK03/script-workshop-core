@@ -1,4 +1,5 @@
 const path = require("node:path");
+const fs = require("node:fs");
 const { pathToFileURL } = require("node:url");
 const { app, BrowserWindow, ipcMain, safeStorage } = require("electron");
 const { createStore, maskedProviders } = require("./config.cjs");
@@ -12,6 +13,13 @@ let launchPromise;
 let status = "尚未启动";
 const settingsFile = path.join(__dirname, "settings.html");
 const settingsUrl = pathToFileURL(settingsFile).href;
+
+if (process.env.SCRIPT_WORKSHOP_USER_DATA) {
+  const isolatedData = path.resolve(process.env.SCRIPT_WORKSHOP_USER_DATA);
+  fs.mkdirSync(isolatedData, { recursive: true, mode: 0o700 });
+  app.setPath("userData", isolatedData);
+  app.setPath("sessionData", isolatedData);
+}
 
 function workPaths() {
   return {

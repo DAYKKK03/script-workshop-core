@@ -13,7 +13,7 @@
     "worker:custom-scripts:check": "tsx --tsconfig tsconfig.json worker/custom-script-worker.ts --check",
     "worker:verify-functional": "tsx --tsconfig tsconfig.json worker/verify-functional.ts",
     "build": "next build",
-    "desktop:prepare": "npm run build && node scripts/prepare-desktop.mjs",
+    "desktop:prepare": "prisma generate && npm run build && node scripts/prepare-desktop.mjs",
     "desktop:dev": "npm run desktop:prepare && electron .",
     "desktop:pack": "npm run desktop:prepare && electron-builder --dir",
     "test:desktop": "node --test tests/desktop-config.test.cjs tests/desktop-runtime.integration.cjs",
