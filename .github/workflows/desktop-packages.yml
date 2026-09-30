@@ -33,11 +33,21 @@ jobs:
       - run: npm ci
       - run: npm run desktop:prepare
       - run: npm run test:desktop
+        if: matrix.platform == 'mac'
         env:
           SCRIPT_WORKSHOP_DEBUG_POSTGRES: "1"
+      - name: Test desktop under a standard Windows token
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: ./scripts/windows-restricted-run.ps1 test
       - run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
       - name: Smoke-test packaged Electron app
+        if: matrix.platform == 'mac'
         run: node scripts/smoke-packaged-desktop.mjs
+      - name: Smoke-test packaged Electron app under a standard Windows token
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: ./scripts/windows-restricted-run.ps1 smoke
       - name: Write SHA-256 checksums
         shell: bash
         run: |
