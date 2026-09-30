@@ -1,0 +1,17 @@
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	@untrusted not header X-EdgeOne-Origin-Verify {$EDGEONE_ORIGIN_SECRET}
+	respond @untrusted 403
+
+	encode zstd gzip
+	reverse_proxy web:3000
+
+	log {
+		output stdout
+		format json
+	}
+}

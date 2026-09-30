@@ -1,0 +1,24 @@
+name: Staging security baseline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  zap:
+    if: ${{ vars.STAGING_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: OWASP ZAP baseline
+        run: |
+          docker run --rm --network host -v "$PWD:/zap/wrk/:rw" -t zaproxy/zap-stable \
+            zap-baseline.py -t "${{ vars.STAGING_URL }}" -r zap-report.html -I
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: zap-report.html
+          retention-days: 14

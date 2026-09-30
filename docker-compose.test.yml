@@ -1,0 +1,96 @@
+name: douyin-script-test
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: douyin_scripts_test
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: test-only
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:55432:5432"
+    networks: [default]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d douyin_scripts_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    image: ${APP_IMAGE:-douyin-script-test}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql://app:test-only@db:5432/douyin_scripts_test?schema=public"
+      SESSION_SECRET: "test-only-session-secret-at-least-32-characters"
+      ADMIN_MFA_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      ADMIN_RECOVERY_CODE_PEPPER: "test-only-recovery-pepper-at-least-32-characters"
+      APP_ORIGIN: "http://localhost:8080"
+      NEXT_PUBLIC_APP_URL: "http://localhost:8080"
+      DOUYIN_PROVIDER: blocked
+      TZ: Asia/Shanghai
+      HOST: "0.0.0.0"
+    command: ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node .next/standalone/server.js"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [default]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  worker:
+    image: ${APP_IMAGE:-douyin-script-test}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql://app:test-only@db:5432/douyin_scripts_test?schema=public"
+      SESSION_SECRET: "test-only-session-secret-at-least-32-characters"
+      DOUYIN_PROVIDER: blocked
+      EXTRACTION_WORKER_CONCURRENCY: 2
+      TZ: Asia/Shanghai
+    command: ["npm", "run", "worker"]
+    deploy:
+      replicas: 1
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks: [default]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h db -p 5432 -U app -d douyin_scripts_test"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: localhost
+      EDGEONE_ORIGIN_SECRET: test-origin-secret
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./deploy/Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    networks: [default]
+
+networks:
+  default:
+
+volumes:
+  postgres_test_data:
+  caddy_data:
+  caddy_config:

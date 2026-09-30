@@ -1,0 +1,82 @@
+name: Staging DeepSeek official API probe
+
+on:
+  push:
+    branches: [staging]
+    paths:
+      - .github/workflows/staging-deepseek-official-probe.yml
+      - scripts/staging-deepseek-official-probe.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-deepseek-official-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, X64, staging-hk]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Diagnose runner storage read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          docker system df
+          du -sh /home/ubuntu/actions-runner/_work /home/ubuntu/actions-runner/_diag /var/lib/docker 2>/dev/null || true
+      - name: Probe official DeepSeek POST transports from worker container
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          deploy_root="/opt/douyin-script"
+          compose_file="$deploy_root/compose.ip-http.yml"
+          probe_file="${RUNNER_TEMP:-/tmp}/staging-deepseek-official-probe.ts"
+
+          cd "$deploy_root"
+          deployed_head="$(cat .deployed-image-tag 2>/dev/null || printf 'missing')"
+          docker compose -f "$compose_file" cp "$GITHUB_WORKSPACE/scripts/staging-deepseek-official-probe.ts" worker:/tmp/staging-deepseek-official-probe.ts
+          set +e
+          docker compose -f "$compose_file" exec -T \
+            -e PROBE_DEPLOYED_HEAD="$deployed_head" \
+            worker node --import tsx /tmp/staging-deepseek-official-probe.ts
+          probe_status="$?"
+          set -e
+          docker compose -f "$compose_file" exec -T -u 0 worker rm -f /tmp/staging-deepseek-official-probe.ts >/dev/null 2>&1 || true
+          exit "$probe_status"
+      - name: Probe controlled transport A/B
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          deploy_root="/opt/douyin-script"
+          compose_file="$deploy_root/compose.ip-http.yml"
+          cd "$deploy_root"
+          docker compose -f "$compose_file" cp "$GITHUB_WORKSPACE/scripts/staging-deepseek-transport-ab.ts" worker:/tmp/staging-deepseek-transport-ab.ts
+          docker compose -f "$compose_file" exec -T worker node --import tsx /tmp/staging-deepseek-transport-ab.ts
+          docker compose -f "$compose_file" exec -T -u 0 worker rm -f /tmp/staging-deepseek-transport-ab.ts >/dev/null 2>&1 || true
+      - name: Probe sanitized Topic runtime and recent outcomes
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          deploy_root="/opt/douyin-script"
+          compose_file="$deploy_root/compose.ip-http.yml"
+          cd "$deploy_root"
+          docker compose -f "$compose_file" exec -T -u 0 worker sh -c 'mkdir -p /app/scripts && chown app:app /app/scripts'
+          docker compose -f "$compose_file" cp "$GITHUB_WORKSPACE/scripts/staging-topic-runtime-probe.ts" worker:/app/scripts/staging-topic-runtime-probe.ts
+          docker compose -f "$compose_file" exec -T worker node --import tsx /app/scripts/staging-topic-runtime-probe.ts
+          docker compose -f "$compose_file" exec -T -u 0 worker rm -f /app/scripts/staging-topic-runtime-probe.ts >/dev/null 2>&1 || true
+          docker compose -f "$compose_file" logs --since 30m topic-worker 2>&1 \
+            | grep -E '\{"event":"topic_generation_(failed|succeeded)"' \
+            | tail -20 \
+            | sed 's/^[^{]*//' || true
+          docker compose -f "$compose_file" logs --since 30m web 2>&1 \
+            | grep -E '\{"event":"topic_create_timing"' \
+            | tail -20 \
+            | sed 's/^[^{]*//' || true

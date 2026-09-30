@@ -1,0 +1,252 @@
+name: Staging DeepSeek probe
+
+on:
+  push:
+    branches: [staging]
+    paths:
+      - .github/workflows/staging-deepseek-probe.yml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: staging-deepseek-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, X64, staging-hk]
+    steps:
+      - name: Probe deployed DeepSeek connectivity from worker container
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          deploy_root="/opt/douyin-script"
+          compose_file="$deploy_root/compose.ip-http.yml"
+          probe_file="${RUNNER_TEMP:-/tmp}/staging-deepseek-probe.ts"
+
+          cd "$deploy_root"
+
+          cat > "$probe_file" <<'TS'
+          import { lookup } from "node:dns/promises";
+          import net from "node:net";
+          import { getDeepSeekRuntimeSummary } from "/app/lib/ai/deepseek.ts";
+
+          type ConnectionResult = "ok" | "fail" | "timeout" | "network_error";
+          type ApiStatusClass = "2xx" | "4xx" | "5xx" | "timeout" | "network_error" | "not_run";
+          type ProviderSubreason =
+            | "auth"
+            | "rate_limit"
+            | "network"
+            | "timeout"
+            | "server_error"
+            | "not_configured"
+            | "unknown";
+
+          const probeTimeoutMs = 10_000;
+
+          async function withTimeout<T>(promise: Promise<T>, timeoutValue: T) {
+            let timer: ReturnType<typeof setTimeout> | undefined;
+
+            try {
+              return await Promise.race([
+                promise,
+                new Promise<T>((resolve) => {
+                  timer = setTimeout(() => resolve(timeoutValue), probeTimeoutMs);
+                })
+              ]);
+            } finally {
+              if (timer) clearTimeout(timer);
+            }
+          }
+
+          async function probeTcp(host: string): Promise<ConnectionResult> {
+            return new Promise((resolve) => {
+              const socket = net.connect({ host, port: 443 });
+              const timer = setTimeout(() => {
+                socket.destroy();
+                resolve("timeout");
+              }, probeTimeoutMs);
+
+              socket.once("connect", () => {
+                clearTimeout(timer);
+                socket.destroy();
+                resolve("ok");
+              });
+              socket.once("error", () => {
+                clearTimeout(timer);
+                resolve("network_error");
+              });
+            });
+          }
+
+          async function probeHttpsHead(url: string): Promise<ConnectionResult> {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), probeTimeoutMs);
+
+            try {
+              await fetch(url, {
+                method: "HEAD",
+                redirect: "manual",
+                signal: controller.signal
+              });
+              return "ok";
+            } catch (error) {
+              return error instanceof Error && error.name === "AbortError"
+                ? "timeout"
+                : "network_error";
+            } finally {
+              clearTimeout(timer);
+            }
+          }
+
+          function apiStatusClass(status: number): ApiStatusClass {
+            const family = Math.floor(status / 100);
+            if (family === 2) return "2xx";
+            if (family === 4) return "4xx";
+            if (family === 5) return "5xx";
+            return "network_error";
+          }
+
+          function providerSubreasonForStatus(status: number): ProviderSubreason {
+            if (status === 401 || status === 403) return "auth";
+            if (status === 429) return "rate_limit";
+            if (status >= 500 && status <= 599) return "server_error";
+            return "unknown";
+          }
+
+          async function probeApi(input: {
+            baseUrl: string;
+            model: string;
+            apiKey: string | undefined;
+          }) {
+            if (!input.apiKey?.trim()) {
+              return {
+                apiStatusClass: "not_run" as const,
+                providerSubreason: "not_configured" as const,
+                attempts: 0
+              };
+            }
+
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), probeTimeoutMs);
+
+            try {
+              const response = await fetch(`${input.baseUrl}/chat/completions`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${input.apiKey.trim()}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  model: input.model,
+                  messages: [{ role: "user", content: "Return an empty JSON object." }],
+                  response_format: { type: "json_object" },
+                  max_tokens: 1,
+                  temperature: 0
+                }),
+                signal: controller.signal
+              });
+
+              return {
+                apiStatusClass: apiStatusClass(response.status),
+                providerSubreason: providerSubreasonForStatus(response.status),
+                attempts: 1
+              };
+            } catch (error) {
+              return {
+                apiStatusClass:
+                  error instanceof Error && error.name === "AbortError"
+                    ? ("timeout" as const)
+                    : ("network_error" as const),
+                providerSubreason:
+                  error instanceof Error && error.name === "AbortError"
+                    ? ("timeout" as const)
+                    : ("network" as const),
+                attempts: 1
+              };
+            } finally {
+              clearTimeout(timer);
+            }
+          }
+
+          async function main() {
+            const runtime = getDeepSeekRuntimeSummary(process.env);
+            const baseUrl = (process.env.DEEPSEEK_API_BASE_URL?.trim() || "https://api.deepseek.com")
+              .replace(/\/+$/, "");
+            let host = "";
+            let headUrl = baseUrl;
+
+            try {
+              const parsed = new URL(baseUrl);
+              host = parsed.hostname;
+              headUrl = parsed.toString();
+            } catch {
+              console.log(JSON.stringify({
+                deployedHead: process.env.PROBE_DEPLOYED_HEAD || "missing",
+                keyStatus: process.env.DEEPSEEK_API_KEY?.trim() ? "exists" : "missing",
+                baseHostPath: runtime.baseHostPath,
+                model: runtime.model,
+                dns: "fail",
+                tcp443: "fail",
+                tlsOrHttpsHead: "fail",
+                apiStatusClass: "not_run",
+                providerSubreason: "not_configured",
+                attempts: 0
+              }));
+              return;
+            }
+
+            const dns = await withTimeout(
+              lookup(host).then(() => "ok" as const).catch(() => "fail" as const),
+              "fail" as const
+            );
+            const tcp443 = dns === "ok" ? await probeTcp(host) : "fail";
+            const tlsOrHttpsHead = tcp443 === "ok" ? await probeHttpsHead(headUrl) : "fail";
+            const api = await probeApi({
+              baseUrl,
+              model: runtime.model,
+              apiKey: process.env.DEEPSEEK_API_KEY
+            });
+
+            console.log(JSON.stringify({
+              deployedHead: process.env.PROBE_DEPLOYED_HEAD || "missing",
+              keyStatus: process.env.DEEPSEEK_API_KEY?.trim() ? "exists" : "missing",
+              baseHostPath: runtime.baseHostPath,
+              model: runtime.model,
+              dns,
+              tcp443,
+              tlsOrHttpsHead,
+              apiStatusClass: api.apiStatusClass,
+              providerSubreason: api.providerSubreason,
+              attempts: api.attempts
+            }));
+          }
+
+          main().catch(() => {
+            console.log(JSON.stringify({
+              deployedHead: process.env.PROBE_DEPLOYED_HEAD || "missing",
+              keyStatus: process.env.DEEPSEEK_API_KEY?.trim() ? "exists" : "missing",
+              baseHostPath: "invalid",
+              model: "unknown",
+              dns: "fail",
+              tcp443: "fail",
+              tlsOrHttpsHead: "fail",
+              apiStatusClass: "network_error",
+              providerSubreason: "unknown",
+              attempts: 1
+            }));
+          });
+          TS
+
+          deployed_head="$(cat .deployed-image-tag 2>/dev/null || printf 'missing')"
+          docker compose -f "$compose_file" cp "$probe_file" worker:/tmp/staging-deepseek-probe.ts
+          set +e
+          docker compose -f "$compose_file" exec -T \
+            -e PROBE_DEPLOYED_HEAD="$deployed_head" \
+            worker node --conditions=react-server --import tsx /tmp/staging-deepseek-probe.ts
+          probe_status="$?"
+          set -e
+          docker compose -f "$compose_file" exec -T -u 0 worker rm -f /tmp/staging-deepseek-probe.ts >/dev/null 2>&1 || true
+          exit "$probe_status"

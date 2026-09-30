@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<title>脚本工坊 · 本地配置</title><link rel="stylesheet" href="settings.css"></head>
+<body><main>
+  <h1>脚本工坊</h1><p class="lead">本地应用配置。数据保存在这台电脑，外部服务仍需联网。</p>
+  <div class="panel"><div class="row"><strong>运行状态</strong><span id="status">正在检查</span></div><button id="start" type="button">启动应用</button></div>
+  <div class="panel"><h2>首次注册邀请码</h2><p>打开应用后使用此邀请码注册本机账号。请自行妥善保管。</p><div class="code" id="invite">加载中</div></div>
+  <form id="form" class="panel"><h2>服务配置</h2>
+    <p>AI 与抖音提取需要您自己的服务参数。密钥留空表示保留现有值；选中清除可删除旧密钥。</p>
+    <fieldset><legend>AI 内容生成 · DeepSeek</legend>
+      <label>API Key <input name="DEEPSEEK_API_KEY" type="password" autocomplete="off" placeholder="未配置"></label><label class="check"><input type="checkbox" data-clear="DEEPSEEK_API_KEY">清除已有 Key</label>
+      <label>API 地址 <input name="DEEPSEEK_API_BASE_URL" type="url" placeholder="https://api.deepseek.com"></label>
+      <label>模型 <input name="DEEPSEEK_MODEL" type="text" placeholder="deepseek-v4-flash"></label>
+    </fieldset>
+    <fieldset><legend>抖音链接提取 · TikHub</legend>
+      <label>API Key <input name="TIKHUB_API_KEY" type="password" autocomplete="off" placeholder="未配置"></label><label class="check"><input type="checkbox" data-clear="TIKHUB_API_KEY">清除已有 Key</label>
+      <label>API 地址 <input name="TIKHUB_API_BASE_URL" type="url" placeholder="https://api.example.com"></label>
+    </fieldset>
+    <fieldset><legend>语音转写 · 火山引擎</legend>
+      <label>API Key <input name="VOLCENGINE_ASR_API_KEY" type="password" autocomplete="off" placeholder="未配置"></label><label class="check"><input type="checkbox" data-clear="VOLCENGINE_ASR_API_KEY">清除已有 Key</label>
+      <label>提交地址 <input name="VOLCENGINE_ASR_SUBMIT_ENDPOINT" type="url"></label>
+      <label>查询地址 <input name="VOLCENGINE_ASR_QUERY_ENDPOINT" type="url"></label>
+      <label>资源 ID <input name="VOLCENGINE_ASR_RESOURCE_ID" type="text"></label>
+      <label>App ID <input name="VOLCENGINE_APP_ID" type="text"></label>
+      <label>Cluster <input name="VOLCENGINE_CLUSTER" type="text"></label>
+      <label>模型 <input name="VOLCENGINE_ASR_MODEL" type="text"></label>
+    </fieldset>
+    <fieldset><legend>媒体中转 · 腾讯云 COS（按需配置）</legend>
+      <p>转写服务无法直接读取视频地址时，可配置对象存储中转。需要公开访问的专用路径和一天的自动清理规则。</p>
+      <label>Secret ID <input name="COS_ACCESS_KEY_ID" type="password" autocomplete="off" placeholder="未配置"></label><label class="check"><input type="checkbox" data-clear="COS_ACCESS_KEY_ID">清除已有 ID</label>
+      <label>Secret Key <input name="COS_SECRET_ACCESS_KEY" type="password" autocomplete="off" placeholder="未配置"></label><label class="check"><input type="checkbox" data-clear="COS_SECRET_ACCESS_KEY">清除已有 Key</label>
+      <label>Bucket <input name="COS_BUCKET" type="text"></label>
+      <label>Region <input name="COS_REGION" type="text" placeholder="ap-hongkong"></label>
+      <label>Endpoint <input name="COS_ENDPOINT" type="text" placeholder="cos.ap-hongkong.myqcloud.com"></label>
+      <label>公开访问地址 <input name="MEDIA_RELAY_PUBLIC_BASE_URL" type="url" placeholder="https://.../"></label>
+    </fieldset>
+    <button id="save" type="submit">保存配置</button><p id="message" role="status"></p>
+  </form>
+</main><script src="settings.js"></script></body></html>
