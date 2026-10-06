@@ -54,7 +54,7 @@
     "recharts": "^3.9.0",
     "server-only": "^0.0.1",
     "three": "^0.184.0",
-    "tsx": "^4.22.4"
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.10",
